@@ -14,34 +14,34 @@ $ npm install @lit-labs/motion
 
 The `animate` directive can be used to animate DOM elements from one lit render
 to the next. If the `animate` element changes state between renders, the directive
-performs a "tweening" animation between the two states based on the options given. 
-In addition, elements can animate when they initially render to DOM and when they 
+performs a "tweening" animation between the two states based on the options given.
+In addition, elements can animate when they initially render to DOM and when they
 are removed.
 
 The directive supports a number of options:
 
-| Option          | Usage                                                                                                          |
-| --------------- | -------------------------------------------------------------------------------------------------------------- |
-| keyframeOptions | configure animation via standard KeyframeAnimationOptions                                                      |
-| properties      | list of properties to animate, defaults to ['left', 'top','width', 'height', 'opacity', 'color', 'background'] |
-| disabled        | disables animation                                                                                             |
-| guard           | function producing values that must change for the `animate` to run                                            |
-| in              | keyframes to use when animating in                                                                             |
-| out             | keyframes to use when animating out                                                                            |
-| skipInitial     | skip animating in the first time                                                                               |
-| id              | used to link to other `animate`'s via `inId`                                                                   |
-| inId            | id of the `animate` to render from when animating in                                                           |
-| onStart         | run when the `animate` starts                                                                                  |
-| onComplete      | run when the `animate` completes                                                                               |
-| onFrames        | run when the frames are produced, use to modify frames                                                         |
+| Option          | Usage                                                                                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| keyframeOptions | configure animation via the [KeyframeEffect Options](https://developer.mozilla.org/en-US/docs/Web/API/KeyframeEffect/KeyframeEffect#parameters) from the Web Animation API. |
+| properties      | list of properties to animate, defaults to ['left', 'top','width', 'height', 'opacity', 'color', 'background']                                                              |
+| disabled        | disables animation                                                                                                                                                          |
+| guard           | function producing values that must change for the `animate` to run                                                                                                         |
+| in              | keyframes to use when animating in                                                                                                                                          |
+| out             | keyframes to use when animating out                                                                                                                                         |
+| skipInitial     | skip animating in the first time                                                                                                                                            |
+| id              | used to link to other `animate`'s via `inId`                                                                                                                                |
+| inId            | id of the `animate` to render from when animating in                                                                                                                        |
+| onStart         | run when the `animate` starts                                                                                                                                               |
+| onComplete      | run when the `animate` completes                                                                                                                                            |
+| onFrames        | run when the frames are produced, use to modify frames                                                                                                                      |
 
 ### How it works
 
-The directive uses the FLIP animation technique--derived from First, Last, Invert, 
-Play. This describes how the directive works. It measures the styling of the `animate` 
-element before a layout change (first) and after a layout change (last). Then it 
-inverts the last layout such that it matches the first layout. Finally it plays an 
-animation which removes the inverted layout such that the element animates to the 
+The directive uses the FLIP animation technique--derived from First, Last, Invert,
+Play. This describes how the directive works. It measures the styling of the `animate`
+element before a layout change (first) and after a layout change (last). Then it
+inverts the last layout such that it matches the first layout. Finally it plays an
+animation which removes the inverted layout such that the element animates to the
 "last" layout. See the [FLIP article by Paul Lewis](https://aerotwist.com/blog/flip-your-animations/)
 for more information about the technique.
 
@@ -112,4 +112,4 @@ animations (which may be paused).
 
 ## Contributing
 
-Please see [CONTRIBUTING.md](./CONTRIBUTING.md).
+Please see [CONTRIBUTING.md](../../../CONTRIBUTING.md).

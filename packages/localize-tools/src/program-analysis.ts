@@ -6,7 +6,8 @@
 
 import ts from 'typescript';
 import * as parse5 from 'parse5';
-import {ProgramMessage, Placeholder, Message} from './messages.js';
+import {ChildNode, ParentNode, TextNode, CommentNode} from '@parse5/tools';
+import {ProgramMessage, Placeholder} from './messages.js';
 import {createDiagnostic} from './typescript.js';
 import {
   generateMsgId,
@@ -370,9 +371,11 @@ interface Expression {
  */
 const EXPRESSION_RAND = String(Math.random()).slice(2);
 const EXPRESSION_START = `_START_LIT_LOCALIZE_EXPR_${EXPRESSION_RAND}_`;
-const EXPRESSION_START_REGEXP = new RegExp(EXPRESSION_START, 'g');
 const EXPRESSION_END = `_END_LIT_LOCALIZE_EXPR_${EXPRESSION_RAND}_`;
-const EXPRESSION_END_REGEXP = new RegExp(EXPRESSION_END, 'g');
+const EXPRESSION_START_END_REGEXP = new RegExp(
+  EXPRESSION_START + '(.*?)' + EXPRESSION_END,
+  'g'
+);
 
 /**
  * Our template is split apart based on template string literal expressions.
@@ -399,15 +402,22 @@ const EXPRESSION_END_REGEXP = new RegExp(EXPRESSION_END, 'g');
  */
 function replaceExpressionsAndHtmlWithPlaceholders(
   parts: Array<string | Expression>
-): Array<string | Placeholder> {
+): Array<string | Omit<Placeholder, 'index'>> {
   const concatenatedHtml = parts
-    .map((part) =>
+    .map((part, expressionIndex) =>
       typeof part === 'string'
         ? part
-        : EXPRESSION_START + part.identifier + EXPRESSION_END
+        : EXPRESSION_START +
+          // Use the index of the expression instead of the actual expression,
+          // because the actual expression might contain embedded HTML which
+          // will confuse HTML parsing. We could also escape it, but it's
+          // simpler to just use the index and swap it back with the actual
+          // expression after HTML parsing.
+          expressionIndex +
+          EXPRESSION_END
     )
     .join('');
-  const contents: Array<string | Placeholder> = [];
+  const contents: Array<string | Omit<Placeholder, 'index'>> = [];
   for (const part of replaceHtmlWithPlaceholders(concatenatedHtml)) {
     if (typeof part === 'string') {
       const startSplit = part.split(EXPRESSION_START);
@@ -418,8 +428,13 @@ function replaceExpressionsAndHtmlWithPlaceholders(
             contents.push(substr);
           }
         } else {
-          const [identifier, tail] = endSplit;
-          contents.push({untranslatable: '${' + identifier + '}'});
+          // Swap the expression index with the actual expression.
+          const [expressionIndexStr, tail] = endSplit;
+          const expressionIndex = Number(expressionIndexStr);
+          const expression = (parts[expressionIndex] as Expression).identifier;
+          contents.push({
+            untranslatable: '${' + expression + '}',
+          });
           if (tail) {
             contents.push(tail);
           }
@@ -430,9 +445,16 @@ function replaceExpressionsAndHtmlWithPlaceholders(
       // markup, it's fine and good to just keep this one placeholder. We just
       // need to fix the syntax.
       contents.push({
-        untranslatable: part.untranslatable
-          .replace(EXPRESSION_START_REGEXP, '${')
-          .replace(EXPRESSION_END_REGEXP, '}'),
+        untranslatable: part.untranslatable.replace(
+          EXPRESSION_START_END_REGEXP,
+          (_, expressionIndexStr) => {
+            // Swap the expression index with the actual expression.
+            const expressionIndex = Number(expressionIndexStr);
+            const expression = (parts[expressionIndex] as Expression)
+              .identifier;
+            return '${' + expression + '}';
+          }
+        ),
       });
     }
   }
@@ -444,7 +466,7 @@ function replaceExpressionsAndHtmlWithPlaceholders(
  * structure.
  *
  * This situation arises because we initially generate unique placeholders for
- * each HTML open/close tag, and for each each template string literal
+ * each HTML open/close tag, and for each template string literal
  * expression, and it's simpler to collapse all of these at once afterwards.
  *
  * For example, if given:
@@ -456,10 +478,11 @@ function replaceExpressionsAndHtmlWithPlaceholders(
  *   [ {ph: '<b>${foo}</b>'} ]
  */
 function combineAdjacentPlaceholders(
-  original: Array<string | Placeholder>
+  original: Array<string | Omit<Placeholder, 'index'>>
 ): Array<string | Placeholder> {
-  const combined = [];
-  const phBuffer = [];
+  const combined: Array<string | Placeholder> = [];
+  const phBuffer: Array<string> = [];
+  let phIdx = 0;
   for (let i = 0; i < original.length; i++) {
     const item = original[i];
     if (typeof item !== 'string') {
@@ -471,7 +494,10 @@ function combineAdjacentPlaceholders(
     } else {
       if (phBuffer.length > 0) {
         // Flush the placeholder buffer.
-        combined.push({untranslatable: phBuffer.splice(0).join('')});
+        combined.push({
+          untranslatable: phBuffer.splice(0).join(''),
+          index: phIdx++,
+        });
       }
       // Some translatable text.
       combined.push(item);
@@ -479,23 +505,23 @@ function combineAdjacentPlaceholders(
   }
   if (phBuffer.length > 0) {
     // The final item was a placeholder, don't forget it.
-    combined.push({untranslatable: phBuffer.join('')});
+    combined.push({untranslatable: phBuffer.join(''), index: phIdx++});
   }
   return combined;
 }
 
 function replaceHtmlWithPlaceholders(
   html: string
-): Array<string | Placeholder> {
-  const components: Array<string | Placeholder> = [];
+): Array<string | Omit<Placeholder, 'index'>> {
+  const components: Array<string | Omit<Placeholder, 'index'>> = [];
 
-  const traverse = (node: parse5.ChildNode): void => {
+  const traverse = (node: ChildNode): void => {
     if (node.nodeName === '#text') {
-      const text = (node as parse5.TextNode).value;
+      const text = (node as TextNode).value;
       components.push(text);
     } else if (node.nodeName === '#comment') {
       components.push({
-        untranslatable: serializeComment(node as parse5.CommentNode),
+        untranslatable: serializeComment(node as CommentNode),
       });
     } else {
       const {open, close} = serializeOpenCloseTags(node);
@@ -524,12 +550,17 @@ function replaceHtmlWithPlaceholders(
  *
  *   <b class="red">foo</b> --> {open: '<b class="red">, close: '</b>'}
  */
-function serializeOpenCloseTags(node: parse5.ChildNode): {
+function serializeOpenCloseTags(node: ChildNode): {
   open: string;
   close: string;
 } {
-  const withoutChildren: parse5.ChildNode = {...node, childNodes: []};
-  const fakeParent = {childNodes: [withoutChildren]} as parse5.Node;
+  const withoutChildren: ChildNode = {
+    ...node,
+    childNodes: [],
+  };
+  const fakeParent = {
+    childNodes: [withoutChildren],
+  } as ParentNode;
   const serialized = parse5.serialize(fakeParent);
   const lastLt = serialized.lastIndexOf('<');
   const open = serialized.slice(0, lastLt);
@@ -544,8 +575,10 @@ function serializeOpenCloseTags(node: parse5.ChildNode): {
  *
  *   {data: "foo"} --> "<!-- foo -->"
  */
-function serializeComment(comment: parse5.CommentNode): string {
-  return parse5.serialize({childNodes: [comment]} as parse5.Node);
+function serializeComment(comment: CommentNode): string {
+  return parse5.serialize({
+    childNodes: [comment],
+  } as ParentNode);
 }
 
 /**
@@ -634,32 +667,44 @@ function dedupeMessages(messages: ProgramMessage[]): {
 } {
   const errors: ts.Diagnostic[] = [];
   const cache = new Map<string, ProgramMessage>();
+  const duplicateCache = new Map<string, ProgramMessage[]>();
   for (const message of messages) {
     const cached = cache.get(message.name);
     if (cached === undefined) {
       cache.set(message.name, message);
     } else if (!messageEqual(message, cached)) {
-      errors.push(
-        createDiagnostic(
-          message.file,
-          message.node,
-          `Message ids must have the same default text wherever they are used`,
-          [
-            createDiagnostic(
-              cached.file,
-              cached.node,
-              'This message id was already found here with different text.'
-            ),
-          ]
-        )
-      );
+      if (duplicateCache.get(cached.name) === undefined) {
+        duplicateCache.set(cached.name, [cached]);
+      }
+      duplicateCache.get(cached.name)!.push(message);
     }
+  }
+  for (const [name, [originalMessage, ...rest]] of duplicateCache) {
+    errors.push(
+      createDiagnostic(
+        originalMessage.file,
+        originalMessage.node,
+        `The translation message with ID ${name} was defined in ${
+          rest.length + 1
+        } places, but with different strings or descriptions. If these messages should be translated together, make sure their strings and descriptions are identical, and consider factoring out a common variable or function. If they should be translated separately, add one or more {id: "..."} overrides to distinguish them.`,
+        rest.map((message) =>
+          createDiagnostic(
+            message.file,
+            message.node,
+            'This message id was already found here with different text.'
+          )
+        )
+      )
+    );
   }
   return {messages: [...cache.values()], errors};
 }
 
-function messageEqual(a: Message, b: Message): boolean {
+function messageEqual(a: ProgramMessage, b: ProgramMessage): boolean {
   if (a.contents.length !== b.contents.length) {
+    return false;
+  }
+  if (a.desc !== b.desc) {
     return false;
   }
   for (let i = 0; i < a.contents.length; i++) {
@@ -680,11 +725,8 @@ function contentEqual(
     }
     return a === b;
   }
-  if (typeof a === 'object') {
-    if (typeof b !== 'object') {
-      return false;
-    }
-    return a.untranslatable === b.untranslatable;
+  if (typeof a === 'object' && typeof b !== 'object') {
+    return false;
   }
   return true;
 }

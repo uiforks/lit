@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-import {html, nothing} from 'lit';
+import {html, svg, nothing} from 'lit';
 import {repeat} from 'lit/directives/repeat.js';
 import {classMap} from 'lit/directives/class-map.js';
 import {LitElement, css, PropertyValues} from 'lit';
 import {property, customElement} from 'lit/decorators.js';
-export {digestForTemplateResult} from 'lit/experimental-hydrate.js';
+export {digestForTemplateResult} from '@lit-labs/ssr-client';
 
 export {render} from '../../lib/render-lit-html.js';
 
@@ -19,7 +19,11 @@ export const simpleTemplateResult = html`<div></div>`;
 
 /* Text Expressions */
 // prettier-ignore
-export const templateWithTextExpression = (x: string) => html`<div>${x}</div>`;
+export const templateWithTextExpression = (x: string|null|undefined) => html`<div>${x}</div>`;
+
+/* Iterable Expression */
+// prettier-ignore
+export const templateWithIterableExpression = (x: Iterable<string>) => html`<div>${x}</div>`;
 
 /* Attribute Expressions */
 // prettier-ignore
@@ -35,6 +39,18 @@ export const templateWithMultiBindingAttributeExpression = (
   x: string,
   y: string
 ) => html`<div test="a ${x} b ${y} c"></div>`;
+// prettier-ignore
+export const inputTemplateWithAttributeExpression = (x: string) =>
+html`<input x=${x}>`;
+// prettier-ignore
+export const inputTemplateWithAttributeExpressionAndChildElement = (x: string) =>
+  html`<input x=${x}><p>hi</p></input>`;
+// prettier-ignore
+export const templateWithMixedCaseAttrs = (str: string) => html`<svg dynamicCamel=${str} staticCamel="static"></svg>`;
+// prettier-ignore
+export const svgTemplate = (x: number, y: number, r: number) => svg`<circle cx="${x}" cy="${y}" r="${r}" />`;
+// prettier-ignore
+export const templateWithSvgTemplate = (x: number, y: number, r: number) => html`<svg>${svgTemplate(x, y, r)}</svg>`;
 
 /* Reflected Property Expressions */
 
@@ -68,6 +84,13 @@ export class TestSimple extends LitElement {
 // prettier-ignore
 export const simpleTemplateWithElement = html`<test-simple></test-simple>`;
 
+// This must be excluded from rendering in the test
+@customElement('test-not-rendered')
+export class NotRendered extends LitElement {}
+
+// prettier-ignore
+export const templateWithNotRenderedElement = html`<test-not-rendered></test-not-rendered>`;
+
 @customElement('test-property')
 export class TestProperty extends LitElement {
   @property() foo?: string;
@@ -80,6 +103,22 @@ export class TestProperty extends LitElement {
 
 // prettier-ignore
 export const elementWithProperty = html`<test-property .foo=${'bar'}></test-property>`;
+export const elementWithAttribute = (x: string | undefined | null) =>
+  html`<test-property foo=${x}></test-property>`;
+
+@customElement('test-reflected-properties')
+export class TestReflectedProperties extends LitElement {
+  @property({type: String, reflect: true, attribute: 'reflect-foo'})
+  foo?: string;
+  @property({type: Boolean, reflect: true}) bar = false;
+  @property({type: String, reflect: true}) baz = 'default reflected string';
+}
+
+// prettier-ignore
+export const elementWithReflectedProperties = html`<test-reflected-properties .foo=${'badazzled'} .bar=${true}></test-reflected-properties>`;
+
+// prettier-ignore
+export const elementWithDefaultReflectedProperties = html`<test-reflected-properties></test-reflected-properties>`;
 
 @customElement('test-will-update')
 export class TestWillUpdate extends LitElement {
@@ -212,3 +251,39 @@ export const nestedTemplateResult = html`<div></div>`;
 export const trickyNestedDynamicChildren = html`<test-simple-slot
   >${html`${nestedTemplateResult}${nestedTemplateResult}`}</test-simple-slot
 >`;
+
+@customElement('test-shadowroot-open')
+export class TestShadowrootOpen extends LitElement {
+  static override shadowRootOptions = {
+    ...LitElement.shadowRootOptions,
+    mode: 'open' as const,
+  };
+}
+
+export const shadowrootOpen = html`<test-shadowroot-open></test-shadowroot-open>`;
+
+@customElement('test-shadowroot-closed')
+export class TestShadowrootClosed extends LitElement {
+  static override shadowRootOptions = {
+    ...LitElement.shadowRootOptions,
+    mode: 'closed' as const,
+  };
+}
+
+export const shadowrootClosed = html`<test-shadowroot-closed></test-shadowroot-closed>`;
+
+@customElement('test-shadowrootdelegatesfocus')
+export class TestShadowrootdelegatesfocus extends LitElement {
+  static override shadowRootOptions = {
+    ...LitElement.shadowRootOptions,
+    delegatesFocus: true,
+  };
+}
+
+export const shadowrootdelegatesfocus = html`<test-shadowrootdelegatesfocus></test-shadowrootdelegatesfocus>`;
+
+/* Invalid Expression Locations */
+export const templateUsingAnInvalidExpressLocation = () => {
+  const value = 'Invalid expression location';
+  return html`<template><div>${value}</div></template>`;
+};

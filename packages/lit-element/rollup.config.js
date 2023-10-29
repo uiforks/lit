@@ -12,7 +12,6 @@ export default litProdConfig({
   entryPoints: [
     'index',
     'lit-element',
-    'experimental-hydrate-support',
     'private-ssr-support',
     'decorators',
     'decorators/custom-element',
@@ -21,6 +20,7 @@ export default litProdConfig({
     'decorators/property',
     'decorators/query',
     'decorators/query-all',
+    'decorators/query-assigned-elements',
     'decorators/query-assigned-nodes',
     'decorators/query-async',
   ],

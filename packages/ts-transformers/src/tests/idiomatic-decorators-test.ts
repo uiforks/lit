@@ -7,6 +7,7 @@
 import {suite} from 'uvu';
 import {compileTsFragment, CompilerHostCache} from './compile-ts-fragment.js';
 import ts from 'typescript';
+// eslint-disable-next-line import/extensions
 import * as assert from 'uvu/assert';
 import prettier from 'prettier';
 import {idiomaticDecoratorsTransformer} from '../idiomatic-decorators.js';
@@ -126,6 +127,19 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
 
       @property({type: Boolean, reflect: true})
       reactiveInitializedBool = false;
+
+      /**
+       * Reactive getter description.
+       */
+      @property({type: Boolean})
+      get reactiveGetter() {
+        return false;
+      }
+
+      @property({type: Boolean})
+      get reactiveGetterNoComment() {
+        return false;
+      }
     }
     `;
 
@@ -140,6 +154,8 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
           reactiveUninitializedObj: {type: Object},
           reactiveInitializedNum: {type: Number, attribute: false},
           reactiveInitializedBool: {type: Boolean, reflect: true},
+          reactiveGetter: {type: Boolean},
+          reactiveGetterNoComment: {type: Boolean},
         };
 
         constructor() {
@@ -150,11 +166,22 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
           this.reactiveInitializedStr = "foo";
           this.reactiveInitializedNum = 42;
           this.reactiveInitializedBool = false;
-        }
+      }
 
         nonReactiveInitialized = 123;
 
         nonReactiveUninitialized;
+
+        /**
+         * Reactive getter description.
+         */
+        get reactiveGetter() {
+          return false;
+        }
+
+        get reactiveGetterNoComment() {
+          return false;
+        }
       }
       `;
     } else {
@@ -173,12 +200,25 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
           this.reactiveInitializedNum = 42;
           this.reactiveInitializedBool = false;
         }
+
+        /**
+         * Reactive getter description.
+         */
+        get reactiveGetter() {
+          return false;
+        }
+
+        get reactiveGetterNoComment() {
+          return false;
+        }
       }
       MyElement.properties = {
         reactiveInitializedStr: {},
         reactiveUninitializedObj: {type: Object},
         reactiveInitializedNum: {type: Number, attribute: false},
         reactiveInitializedBool: {type: Boolean, reflect: true},
+        reactiveGetter: {type: Boolean},
+        reactiveGetterNoComment: {type: Boolean},
       };
       `;
     }
@@ -207,6 +247,19 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
       @property({type: Boolean, reflect: true})
       reactiveInitializedBool = false;
 
+      /**
+       * Reactive getter description.
+       */
+      @property({type: Boolean})
+      get reactiveGetter() {
+        return false;
+      }
+
+      @property({type: Boolean})
+      get reactiveGetterNoComment() {
+        return false;
+      }
+
       constructor() {
         super();
       }
@@ -224,11 +277,24 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
           reactiveUninitializedObj: {type: Object},
           reactiveInitializedNum: {type: Number, attribute: false},
           reactiveInitializedBool: {type: Boolean, reflect: true},
+          reactiveGetter: {type: Boolean},
+          reactiveGetterNoComment: {type: Boolean},
         };
 
         nonReactiveInitialized = 123;
 
         nonReactiveUninitialized;
+
+        /**
+         * Reactive getter description.
+         */
+        get reactiveGetter() {
+          return false;
+        }
+
+        get reactiveGetterNoComment() {
+          return false;
+        }
 
         constructor() {
           super();
@@ -243,6 +309,17 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
       import {LitElement} from 'lit';
 
       class MyElement extends LitElement {
+        /**
+         * Reactive getter description.
+         */
+        get reactiveGetter() {
+          return false;
+        }
+
+        get reactiveGetterNoComment() {
+          return false;
+        }
+
         constructor() {
           super();
 
@@ -257,6 +334,52 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
         reactiveUninitializedObj: {type: Object},
         reactiveInitializedNum: {type: Number, attribute: false},
         reactiveInitializedBool: {type: Boolean, reflect: true},
+        reactiveGetter: {type: Boolean},
+        reactiveGetterNoComment: {type: Boolean},
+      };
+      `;
+    }
+    checkTransform(input, expected, options);
+  });
+
+  test('@property (do not create constructor if just getter)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {property} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      @property({type: Boolean})
+      get reactiveGetter() {
+        return false;
+      }
+    }
+    `;
+
+    let expected;
+    if (options.useDefineForClassFields) {
+      expected = `
+      import {LitElement} from 'lit';
+
+      class MyElement extends LitElement {
+        static properties = {
+          reactiveGetter: {type: Boolean},
+        };
+        get reactiveGetter() {
+          return false;
+        }
+      }
+      `;
+    } else {
+      expected = `
+      import {LitElement} from 'lit';
+
+      class MyElement extends LitElement {
+        get reactiveGetter() {
+          return false;
+        }
+      }
+      MyElement.properties = {
+        reactiveGetter: {type: Boolean},
       };
       `;
     }
@@ -563,6 +686,510 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
     checkTransform(input, expected, options);
   });
 
+  test('@queryAssignedElements (default slot)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      unrelated1() {}
+
+      // listItems comment
+      @queryAssignedElements()
+      listItems: NodeListOf<HTMLElement>;
+
+      unrelated2() {}
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    class MyElement extends LitElement {
+      unrelated1() {}
+
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+        ?.querySelector(\`slot:not([name])\`)
+        ?.assignedElements() ?? [];
+      }
+
+      unrelated2() {}
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedElements (with slot name)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements({ slot: 'list' })
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=list]\`)
+          ?.assignedElements() ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedElements (with flatten)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements({ slot: \`list\`, flatten: true })
+      listItems: NodeListOf<HTMLElement>;
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=list]\`)
+          ?.assignedElements({flatten: true}) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedElements (with selector)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements({slot: 'list', flatten: false, selector: '.item'})
+      listItems: NodeListOf<HTMLElement>;
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=list]\`)
+          ?.assignedElements({ flatten: false })
+          ?.filter((node) => node.matches('.item')
+          ) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedElements (with assignedElements identifier)', () => {
+    // It doesn't matter if the HTMLSlotElement.assignedElements options are
+    // using an identifer as we don't need to extract them.
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    const isFlatten: boolean = false;
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements({slot: 'list', flatten: isFlatten, selector: '.item'})
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    const isFlatten = false;
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=list]\`)
+          ?.assignedElements({ flatten: isFlatten })
+          ?.filter((node) => node.matches(".item")
+          ) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedElements (with slot and selector identifiers)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    const slot = 'list';
+    const selector = '.item';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements({slot: slot, selector: selector})
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    const slot = 'list';
+    const selector = '.item';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=\${slot}]\`)
+          ?.assignedElements()
+          ?.filter((node) => node.matches(selector)
+          ) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedElements (shorthand properties)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    const slot = 'list';
+    const selector = '.item';
+    const flatten: boolean = false;
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements({slot, selector, flatten})
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    const slot = 'list';
+    const selector = '.item';
+    const flatten = false;
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=\${slot}]\`)
+          ?.assignedElements({ flatten })
+          ?.filter((node) => node.matches(selector)
+          ) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedElements (arbitrary inline expressions)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements({slot: "li" + "st", selector: "." + "item", flatten: true || false})
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=\${"li" + "st"}]\`)
+          ?.assignedElements({ flatten: true || false })
+          ?.filter((node) => node.matches("." + "item")
+          ) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedElements (fails if not object literal)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    const someIdentifier = {slot: 'list'};
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements(someIdentifier)
+      listItems: HTMLElement[];
+    }
+    `;
+    assert.throws(
+      () => checkTransform(input, '', options),
+      /expected to be an inlined object literal/
+    );
+  });
+
+  test('@queryAssignedElements (fails if not property assignment - spread)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedElements} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedElements({slot: 'list', ...{}})
+      listItems: HTMLElement[];
+    }
+    `;
+    assert.throws(
+      () => checkTransform(input, '', options),
+      /argument can only include property assignment/
+    );
+  });
+
+  test('@queryAssignedNodes (with slot name)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedNodes} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedNodes({ slot: 'list' })
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=list]\`)
+          ?.assignedNodes() ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedNodes (with flatten)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedNodes} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedNodes({ slot: \`list\`, flatten: true })
+      listItems: NodeListOf<HTMLElement>;
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=list]\`)
+          ?.assignedNodes({flatten: true}) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedNodes (with assignedNodes identifier)', () => {
+    // It doesn't matter if the HTMLSlotElement.assignedNodes options are
+    // using an identifer as we don't need to extract them.
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedNodes} from 'lit/decorators.js';
+
+    const isFlatten: boolean = false;
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedNodes({slot: 'list', flatten: isFlatten})
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    const isFlatten = false;
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=list]\`)
+          ?.assignedNodes({ flatten: isFlatten }) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedNodes (with slot and selector identifiers)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedNodes} from 'lit/decorators.js';
+
+    const slot = 'list';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedNodes({slot: slot})
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    const slot = 'list';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=\${slot}]\`)
+          ?.assignedNodes() ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedNodes (shorthand properties)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedNodes} from 'lit/decorators.js';
+
+    const slot = 'list';
+    const flatten: boolean = false;
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedNodes({slot, flatten})
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    const slot = 'list';
+    const flatten = false;
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=\${slot}]\`)
+          ?.assignedNodes({ flatten }) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedNodes (arbitrary inline expressions)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedNodes} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedNodes({slot: "li" + "st", flatten: true || false})
+      listItems: HTMLElement[];
+    }
+    `;
+
+    const expected = `
+    import {LitElement} from 'lit';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      get listItems() {
+        return this.renderRoot
+          ?.querySelector(\`slot[name=\${"li" + "st"}]\`)
+          ?.assignedNodes({ flatten: true || false }) ?? [];
+      }
+    }
+    `;
+    checkTransform(input, expected, options);
+  });
+
+  test('@queryAssignedNodes (fails if not object literal)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedNodes} from 'lit/decorators.js';
+
+    const someIdentifier = {slot: 'list'};
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedNodes(someIdentifier)
+      listItems: HTMLElement[];
+    }
+    `;
+    assert.throws(
+      () => checkTransform(input, '', options),
+      /expected to be an inlined object literal/
+    );
+  });
+
+  test('@queryAssignedNodes (fails if not property assignment - spread)', () => {
+    const input = `
+    import {LitElement} from 'lit';
+    import {queryAssignedNodes} from 'lit/decorators.js';
+
+    class MyElement extends LitElement {
+      // listItems comment
+      @queryAssignedNodes({slot: 'list', ...{}})
+      listItems: HTMLElement[];
+    }
+    `;
+    assert.throws(
+      () => checkTransform(input, '', options),
+      /argument can only include property assignment/
+    );
+  });
+
   test('@queryAssignedNodes (default slot)', () => {
     const input = `
     import {LitElement} from 'lit';
@@ -588,96 +1215,11 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
       // listItems comment
       get listItems() {
         return this.renderRoot
-        ?.querySelector('slot:not([name])')
+        ?.querySelector(\`slot:not([name])\`)
         ?.assignedNodes() ?? [];
       }
 
       unrelated2() {}
-    }
-    `;
-    checkTransform(input, expected, options);
-  });
-
-  test('@queryAssignedNodes (with slot name)', () => {
-    const input = `
-    import {LitElement} from 'lit';
-    import {queryAssignedNodes} from 'lit/decorators.js';
-
-    class MyElement extends LitElement {
-      // listItems comment
-      @queryAssignedNodes('list')
-      listItems: NodeListOf<HTMLElement>;
-    }
-    `;
-
-    const expected = `
-    import {LitElement} from 'lit';
-
-    class MyElement extends LitElement {
-      // listItems comment
-      get listItems() {
-        return this.renderRoot
-          ?.querySelector('slot[name=list]')
-          ?.assignedNodes() ?? [];
-      }
-    }
-    `;
-    checkTransform(input, expected, options);
-  });
-
-  test('@queryAssignedNodes (with flatten)', () => {
-    const input = `
-    import {LitElement} from 'lit';
-    import {queryAssignedNodes} from 'lit/decorators.js';
-
-    class MyElement extends LitElement {
-      // listItems comment
-      @queryAssignedNodes('list', true)
-      listItems: NodeListOf<HTMLElement>;
-    }
-    `;
-
-    const expected = `
-    import {LitElement} from 'lit';
-
-    class MyElement extends LitElement {
-      // listItems comment
-      get listItems() {
-        return this.renderRoot
-          ?.querySelector('slot[name=list]')
-          ?.assignedNodes({flatten: true}) ?? [];
-      }
-    }
-    `;
-    checkTransform(input, expected, options);
-  });
-
-  test('@queryAssignedNodes (with selector)', () => {
-    const input = `
-    import {LitElement} from 'lit';
-    import {queryAssignedNodes} from 'lit/decorators.js';
-
-    class MyElement extends LitElement {
-      // listItems comment
-      @queryAssignedNodes('list', false, '.item')
-      listItems: NodeListOf<HTMLElement>;
-    }
-    `;
-
-    const expected = `
-    import {LitElement} from 'lit';
-
-    class MyElement extends LitElement {
-      // listItems comment
-      get listItems() {
-        return this.renderRoot
-          ?.querySelector('slot[name=list]')
-          ?.assignedNodes()
-          ?.filter((node) =>
-            node.nodeType === Node.ELEMENT_NODE &&
-              node.matches('.item')
-          ) ?? [];
-      }
     }
     `;
     checkTransform(input, expected, options);
@@ -1017,8 +1559,6 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
     'lit/decorators/custom-element.js',
     '@lit/reactive-element/decorators.js',
     '@lit/reactive-element/decorators/custom-element.js',
-    'lit-element',
-    'lit-element/index.js',
     'lit-element/decorators.js',
   ]) {
     test(`various valid import specifiers [${specifier}]`, () => {
@@ -1047,7 +1587,6 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
     'lit/decorators/custom-element',
     '@lit/reactive-element/decorators',
     '@lit/reactive-element/decorators/custom-element',
-    'lit-element/index',
     'lit-element/decorators',
   ]) {
     test(`various invalid import specifiers [${specifier}]`, () => {
@@ -1068,7 +1607,8 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
 
   test('only remove imports that will be transformed', () => {
     const input = `
-    import {LitElement, customElement} from 'lit-element';
+    import {LitElement} from 'lit-element';
+    import {customElement} from 'lit-element/decorators.js';
 
     @customElement('my-element')
     class MyElement extends LitElement {
@@ -1087,7 +1627,8 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
 
   test("don't remove existing no-binding import", () => {
     const input = `
-    import {LitElement, customElement} from 'lit-element';
+    import {LitElement} from 'lit-element';
+    import {customElement} from 'lit-element/decorators.js';
     import './my-custom-element.js';
 
     @customElement('my-element')
@@ -1374,17 +1915,17 @@ const tests = (test: uvu.Test<uvu.Context>, options: ts.CompilerOptions) => {
 
 const baseOptions = () => {
   const options = ts.getDefaultCompilerOptions();
-  options.target = ts.ScriptTarget.ESNext;
-  options.module = ts.ModuleKind.ESNext;
   options.moduleResolution = ts.ModuleResolutionKind.NodeJs;
   options.importHelpers = true;
   return options;
 };
 
 const standardOptions = baseOptions();
+standardOptions.target = ts.ScriptTarget.ESNext;
 standardOptions.useDefineForClassFields = true;
 tests(suite('standard class field emit'), standardOptions);
 
 const legacyOptions = baseOptions();
+legacyOptions.target = ts.ScriptTarget.ES2021;
 legacyOptions.useDefineForClassFields = false;
 tests(suite('legacy class field emit'), legacyOptions);

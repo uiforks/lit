@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-import {_$LH, Part, DirectiveParent, TemplateResult} from './lit-html.js';
+import {
+  _$LH,
+  Part,
+  DirectiveParent,
+  TemplateResult,
+  CompiledTemplateResult,
+} from './lit-html.js';
 import {
   DirectiveResult,
   DirectiveClass,
@@ -40,12 +46,20 @@ export const TemplateResultType = {
 } as const;
 
 export type TemplateResultType =
-  typeof TemplateResultType[keyof typeof TemplateResultType];
+  (typeof TemplateResultType)[keyof typeof TemplateResultType];
+
+type IsTemplateResult = {
+  (val: unknown): val is TemplateResult | CompiledTemplateResult;
+  <T extends TemplateResultType>(
+    val: unknown,
+    type: T
+  ): val is TemplateResult<T>;
+};
 
 /**
- * Tests if a value is a TemplateResult.
+ * Tests if a value is a TemplateResult or a CompiledTemplateResult.
  */
-export const isTemplateResult = (
+export const isTemplateResult: IsTemplateResult = (
   value: unknown,
   type?: TemplateResultType
 ): value is TemplateResult =>
@@ -53,6 +67,15 @@ export const isTemplateResult = (
     ? // This property needs to remain unminified.
       (value as TemplateResult)?.['_$litType$'] !== undefined
     : (value as TemplateResult)?.['_$litType$'] === type;
+
+/**
+ * Tests if a value is a CompiledTemplateResult.
+ */
+export const isCompiledTemplateResult = (
+  value: unknown
+): value is CompiledTemplateResult => {
+  return (value as CompiledTemplateResult)?.['_$litType$']?.h != null;
+};
 
 /**
  * Tests if a value is a DirectiveResult.
@@ -173,7 +196,7 @@ export const setChildPartValue = <T extends ChildPart>(
   return part;
 };
 
-// A sentinal value that can never appear as a part value except when set by
+// A sentinel value that can never appear as a part value except when set by
 // live(). Used to force a dirty-check to fail and cause a re-render.
 const RESET_VALUE = {};
 
@@ -196,7 +219,7 @@ export const setCommittedValue = (part: Part, value: unknown = RESET_VALUE) =>
  *
  * The committed value is used for change detection and efficient updates of
  * the part. It can differ from the value set by the template or directive in
- * cases where the template value is transformed before being commited.
+ * cases where the template value is transformed before being committed.
  *
  * - `TemplateResult`s are committed as a `TemplateInstance`
  * - Iterables are committed as `Array<ChildPart>`

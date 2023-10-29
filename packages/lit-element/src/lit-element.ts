@@ -5,15 +5,15 @@
  */
 
 /**
- * The main LitElement module, which defines the [[`LitElement`]] base class and
- * related APIs.
+ * The main LitElement module, which defines the {@linkcode LitElement} base
+ * class and related APIs.
  *
  *  LitElement components can define a template and a set of observed
  * properties. Changing an observed property triggers a re-render of the
  * element.
  *
- *  Import [[`LitElement`]] and [[`html`]] from this module to create a
- * component:
+ *  Import {@linkcode LitElement} and {@linkcode html} from this module to
+ * create a component:
  *
  *  ```js
  * import {LitElement, html} from 'lit-element';
@@ -40,9 +40,9 @@
  * customElements.define('my-element', MyElement);
  * ```
  *
- * `LitElement` extends [[`ReactiveElement`]] and adds lit-html templating.
- * The `ReactiveElement` class is provided for users that want to build
- * their own custom element base classes that don't use lit-html.
+ * `LitElement` extends {@linkcode ReactiveElement} and adds lit-html
+ * templating. The `ReactiveElement` class is provided for users that want to
+ * build their own custom element base classes that don't use lit-html.
  *
  * @packageDocumentation
  */
@@ -51,9 +51,44 @@ import {render, RenderOptions, noChange, RootPart} from 'lit-html';
 export * from '@lit/reactive-element';
 export * from 'lit-html';
 
-// For backwards compatibility export ReactiveElement as UpdatingElement. Note,
-// IE transpilation requires exporting like this.
-export const UpdatingElement = ReactiveElement;
+import {LitUnstable} from 'lit-html';
+import {ReactiveUnstable} from '@lit/reactive-element';
+
+/**
+ * Contains types that are part of the unstable debug API.
+ *
+ * Everything in this API is not stable and may change or be removed in the future,
+ * even on patch releases.
+ */
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace Unstable {
+  /**
+   * When Lit is running in dev mode and `window.emitLitDebugLogEvents` is true,
+   * we will emit 'lit-debug' events to window, with live details about the update and render
+   * lifecycle. These can be useful for writing debug tooling and visualizations.
+   *
+   * Please be aware that running with window.emitLitDebugLogEvents has performance overhead,
+   * making certain operations that are normally very cheap (like a no-op render) much slower,
+   * because we must copy data and dispatch events.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  export namespace DebugLog {
+    export type Entry =
+      | LitUnstable.DebugLog.Entry
+      | ReactiveUnstable.DebugLog.Entry;
+  }
+}
+/*
+ * When using Closure Compiler, JSCompiler_renameProperty(property, object) is
+ * replaced at compile time by the munged name for object[property]. We cannot
+ * alias this function, so we have to use a small shim that has the same
+ * behavior when not compiling.
+ */
+/*@__INLINE__*/
+const JSCompiler_renameProperty = <P extends PropertyKey>(
+  prop: P,
+  _obj: unknown
+): P => prop;
 
 const DEV_MODE = true;
 
@@ -81,18 +116,10 @@ if (DEV_MODE) {
  *
  * To define a component, subclass `LitElement` and implement a
  * `render` method to provide the component's template. Define properties
- * using the [[`properties`]] property or the [[`property`]] decorator.
+ * using the {@linkcode LitElement.properties properties} property or the
+ * {@linkcode property} decorator.
  */
 export class LitElement extends ReactiveElement {
-  /**
-   * Ensure this class is marked as `finalized` as an optimization ensuring
-   * it will not needlessly try to `finalize`.
-   *
-   * Note this property name is a string to prevent breaking Closure JS Compiler
-   * optimizations. See @lit/reactive-element for more information.
-   */
-  protected static override ['finalized'] = true;
-
   // This property needs to remain unminified.
   static ['_$litElement$'] = true;
 
@@ -197,6 +224,17 @@ export class LitElement extends ReactiveElement {
   }
 }
 
+/**
+ * Ensure this class is marked as `finalized` as an optimization ensuring
+ * it will not needlessly try to `finalize`.
+ *
+ * Note this property name is a string to prevent breaking Closure JS Compiler
+ * optimizations. See @lit/reactive-element for more information.
+ */
+(LitElement as unknown as Record<string, unknown>)[
+  JSCompiler_renameProperty('finalized', LitElement)
+] = true;
+
 // Install hydration if available
 globalThis.litElementHydrateSupport?.({LitElement});
 
@@ -205,36 +243,6 @@ const polyfillSupport = DEV_MODE
   ? globalThis.litElementPolyfillSupportDevMode
   : globalThis.litElementPolyfillSupport;
 polyfillSupport?.({LitElement});
-
-// DEV mode warnings
-if (DEV_MODE) {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  // Note, for compatibility with closure compilation, this access
-  // needs to be as a string property index.
-  (LitElement as any)['finalize'] = function (this: typeof LitElement) {
-    const finalized = (ReactiveElement as any).finalize.call(this);
-    if (!finalized) {
-      return false;
-    }
-    const warnRemovedOrRenamed = (obj: any, name: string, renamed = false) => {
-      if (obj.hasOwnProperty(name)) {
-        const ctorName = (typeof obj === 'function' ? obj : obj.constructor)
-          .name;
-        issueWarning(
-          renamed ? 'renamed-api' : 'removed-api',
-          `\`${name}\` is implemented on class ${ctorName}. It ` +
-            `has been ${renamed ? 'renamed' : 'removed'} ` +
-            `in this version of LitElement.`
-        );
-      }
-    };
-    warnRemovedOrRenamed(this, 'render');
-    warnRemovedOrRenamed(this, 'getStyles', true);
-    warnRemovedOrRenamed(this.prototype, 'adoptStyles');
-    return true;
-  };
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-}
 
 /**
  * END USERS SHOULD NOT RELY ON THIS OBJECT.
@@ -269,7 +277,7 @@ export const _$LE = {
 
 // IMPORTANT: do not change the property name or the assignment expression.
 // This line will be used in regexes to search for LitElement usage.
-(globalThis.litElementVersions ??= []).push('3.0.1');
+(globalThis.litElementVersions ??= []).push('4.0.1');
 if (DEV_MODE && globalThis.litElementVersions.length > 1) {
   issueWarning!(
     'multiple-versions',

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-import {queryAssignedNodes} from '../../decorators/query-assigned-nodes.js';
+import {queryAssignedNodes} from '@lit/reactive-element/decorators/query-assigned-nodes.js';
+import {queryAssignedElements} from '@lit/reactive-element/decorators/query-assigned-elements.js';
 import {
   canTestReactiveElement,
   generateElementName,
@@ -23,11 +24,11 @@ const flush =
   class D extends RenderingElement {
     @queryAssignedNodes() defaultAssigned!: Node[];
 
-    // The `true` on the decorator indicates that results should be flattened.
-    @queryAssignedNodes('footer', true) footerAssigned!: Node[];
+    @queryAssignedNodes({slot: 'footer', flatten: true})
+    footerAssigned!: Node[];
 
-    @queryAssignedNodes('footer', true, '.item')
-    footerAssignedItems!: Element[];
+    @queryAssignedElements({slot: 'footer', flatten: true, selector: '.item'})
+    footerAssignedItems!: HTMLElement[];
 
     override render() {
       return html`
@@ -41,8 +42,6 @@ const flush =
   class E extends RenderingElement {
     @queryAssignedNodes() defaultAssigned!: Node[];
 
-    @queryAssignedNodes('header') headerAssigned!: Node[];
-
     override render() {
       return html`
         <slot name="header"></slot>
@@ -53,11 +52,9 @@ const flush =
   customElements.define('assigned-nodes-el-2', E);
 
   const defaultSymbol = Symbol('default');
-  const headerSymbol = Symbol('header');
+
   class S extends RenderingElement {
     @queryAssignedNodes() [defaultSymbol]!: Node[];
-
-    @queryAssignedNodes('header') [headerSymbol]!: Node[];
 
     override render() {
       return html`
@@ -111,19 +108,14 @@ const flush =
 
   setup(async () => {
     container = document.createElement('div');
-    container.id = 'test-container';
-    document.body.appendChild(container);
+    document.body.append(container);
     el = new C();
     container.appendChild(el);
-    await el.updateComplete;
-    await el.assignedNodesEl.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
   });
 
   teardown(() => {
-    if (container !== undefined) {
-      container.parentElement!.removeChild(container);
-      (container as any) = undefined;
-    }
+    container?.remove();
   });
 
   test('returns assignedNodes for slot', () => {
@@ -135,10 +127,9 @@ const flush =
     ]);
     const child = document.createElement('div');
     const text1 = document.createTextNode('');
-    el.assignedNodesEl.appendChild(text1);
-    el.assignedNodesEl.appendChild(child);
+    el.assignedNodesEl.append(text1, child);
     const text2 = document.createTextNode('');
-    el.assignedNodesEl.appendChild(text2);
+    el.assignedNodesEl.append(text2);
     flush();
     assert.deepEqual(el.assignedNodesEl.defaultAssigned, [
       el.div,
@@ -147,7 +138,7 @@ const flush =
       child,
       text2,
     ]);
-    el.assignedNodesEl.removeChild(child);
+    child.remove();
     flush();
     assert.deepEqual(el.assignedNodesEl.defaultAssigned, [
       el.div,
@@ -172,11 +163,10 @@ const flush =
     assert.deepEqual(el.assignedNodesEl.footerAssigned, []);
     const child1 = document.createElement('div');
     const child2 = document.createElement('div');
-    el.appendChild(child1);
-    el.appendChild(child2);
+    el.append(child1, child2);
     flush();
     assert.deepEqual(el.assignedNodesEl.footerAssigned, [child1, child2]);
-    el.removeChild(child2);
+    child2.remove();
     flush();
     assert.deepEqual(el.assignedNodesEl.footerAssigned, [child1]);
   });
@@ -189,11 +179,10 @@ const flush =
     const child1 = document.createElement('div');
     const child2 = document.createElement('div');
     child2.classList.add('item');
-    el.appendChild(child1);
-    el.appendChild(child2);
+    el.append(child1, child2);
     flush();
     assert.deepEqual(el.assignedNodesEl.footerAssignedItems, [child2]);
-    el.removeChild(child2);
+    child2.remove();
     flush();
     assert.deepEqual(el.assignedNodesEl.footerAssignedItems, []);
   });
@@ -205,6 +194,7 @@ const flush =
     const text1 = document.createTextNode('');
     const text2 = document.createTextNode('');
     child2.classList.add('item');
+    el.append(child1, text1, child2, text2);
     el.appendChild(child1);
     el.appendChild(text1);
     el.appendChild(child2);

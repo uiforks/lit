@@ -12,13 +12,11 @@ declare var reactiveElementPolyfillSupport:
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | ((options: {ReactiveElement: any}) => void);
 // eslint-disable-next-line no-var
-declare var reactiveElementPolyfillSupportDevMode:
-  | undefined
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  | ((options: {ReactiveElement: any}) => void);
+declare var reactiveElementPolyfillSupportDevMode: typeof reactiveElementPolyfillSupport;
 
 // eslint-disable-next-line no-var
 declare var reactiveElementVersions: undefined | Array<string>;
+
 // eslint-disable-next-line no-var
 declare var litIssuedWarnings: undefined | Set<string | undefined>;
 
